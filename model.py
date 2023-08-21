@@ -1,5 +1,8 @@
 import torch
 from torch_geometric.data import Batch,Data
+from torch.nn import Sequential as Seq, LazyLinear, LeakyReLU, LazyBatchNorm1d, LayerNorm
+from torch_geometric.nn import MetaLayer
+from torch_scatter import scatter_mean, scatter_add
 
 NO_GRAPH_FEATURES=128
 
@@ -63,7 +66,6 @@ class GlobalModel(torch.nn.Module):
                               LazyLinear(NO_GRAPH_FEATURES)).apply(init_weights)
 
     def forward(self, x, edge_index, edge_attr, u, batch):
-        print(x, edge_index, edge_attr, u, batch)
         # x: [N, F_x], where N is the number of nodes.
         # edge_index: [2, E] with max entry N - 1.
         # edge_attr: [E, F_e]
@@ -117,92 +119,3 @@ class GNN_FULL_CLASS(torch.nn.Module):
         targs = self.mlp_last(enc_x)
 
         return targs
-    
-def init_model(NO_MP, lr, wd):
-  # Model
-  NO_MP = NO_MP
-  model = GNN_FULL_CLASS(NO_MP)
-
-  # Optimizer
-  LEARNING_RATE = lr
-  optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=wd)
-
-  # Criterion
-  #criterion = torch.nn.MSELoss()
-  criterion = torch.nn.L1Loss()
-  return model, optimizer, criterion
-
-def train(model, criterion, optimizer, loader):
-    loss_sum = 0
-    for batch in loader:
-        # Forward pass and gradient descent
-        labels = batch.y
-        predictions = model(batch)
-        loss = criterion(predictions[torch.isfinite(labels)], labels[torch.isfinite(labels)])
-
-        # Backpropagation
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        loss_sum += loss.item()
-    return loss_sum/len(loader)
-
-
-
-def evaluate(model, criterion, loader):
-    loss_sum = 0
-    with torch.no_grad():
-        for batch in loader:
-            # Forward pass
-            labels = batch.y
-            predictions = model(batch)
-            loss = criterion(predictions[torch.isfinite(labels)], labels[torch.isfinite(labels)])
-            loss_sum += loss.item()
-    return loss_sum/len(loader)
-
-def chunk_into_n(lst, n):
-  size = math.ceil(len(lst) / n)
-  return list(
-    map(lambda x: lst[x * size:x * size + size],
-    list(range(n)))
-  )
-
-def get_data_loaders(data, split, batch_size):
-    random.Random().shuffle(data)
-    training_data = all_data[:int(len(all_data)*split)]
-    testing_data = all_data[int(len(all_data)*split):]
-    train_loader = DataLoader(training_data, batch_size = batch_size)
-    test_loader = DataLoader(testing_data, batch_size = batch_size)
-    return train_loader, test_loader
-
-def getBondElements(bond):
-  
-    a= bond.GetEndAtom().GetSymbol()
-    b = bond.GetBeginAtom().GetSymbol()
-    return a+b if a<b else b+a
-
-
-def train_model(train_set, test_set, split, batch_size, epochs, weight_decay=0.005, learning_rate=0.0003, NO_MP=7):
-    NO_MP = NO_MP
-    model = GNN_FULL_CLASS(NO_MP)
-
-    # Optimizer
-    LEARNING_RATE = learning_rate
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=weight_decay)
-
-    # Criterion
-    #criterion = torch.nn.MSELoss()
-    criterion = torch.nn.L1Loss()
-
-    model.train()
-
-    train_loader = DataLoader(train_set, batch_size = batch_size)
-    test_loader = DataLoader(test_set, batch_size = batch_size)
-
-    for epoch in range(epochs):
-        tloss = train(model, criterion, optimizer, train_loader)
-        train_err = evaluate(model, criterion, train_loader)
-        test_err = evaluate(model, criterion, test_loader)
-    #print(train_err, test_err)
-    return (test_err, tloss, train_err)
