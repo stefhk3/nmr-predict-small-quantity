@@ -1,0 +1,1 @@
+This repository contains the code for the paper "NMR shift prediction from small data quantities" by Herman Rull1, Markus Fischer2, and Stefan Kuhn (forthcoming).
