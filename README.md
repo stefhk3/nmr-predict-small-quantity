@@ -1,6 +1,6 @@
 This repository contains the code for the paper "NMR shift prediction from small data quantities" by Herman Rull, Markus Fischer, and Stefan Kuhn (forthcoming).
 
-#Prerequisites
+# Prerequisites
 
 Check out this repository using a git client, or download the repository using the green code button on the github page. The new directory nmr-predict-small-quantity is the directory from where all commands should be run.
 
@@ -16,7 +16,7 @@ activates the environment.
 
 If you want to create your own setup, the following packages are needed. They should include everything via dependencies, but this might depend on your setup: rdkit, mendeleev, pytorch, pytorch_geometric, pytorch_scatter, pytorch_sparse, scikit-learn
 
-#Running
+# Running
 
 You can run the program with
 
