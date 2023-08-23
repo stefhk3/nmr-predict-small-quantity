@@ -1,3 +1,6 @@
+"""\
+This contains code to build the features and the graph.
+"""
 import numpy as np
 from rdkit import Chem
 from sklearn.preprocessing import OneHotEncoder
@@ -6,97 +9,6 @@ import math
 from torch_geometric.data import Batch,Data
 import torch
 from torch import tensor
-
-el_map={}
-
-
-def atom_features_default():
-
-  feature_getters = {}
-
-  feature_getters["ohe atomic number"] = lambda atom:atomic_number_ohe.transform(np.array([[atom.GetAtomicNum()]]))[0] # Atomic number
-  feature_getters["hyb ohe"] = lambda atom: hybridization_ohe.transform(np.array([[atom.GetHybridization().name]]))[0]
-  feature_getters["valence ohe"] = lambda atom: valence_ohe.transform(np.array([[atom.GetTotalValence()]]))[0]
-  feature_getters["hybridization"] = lambda atom: atom.GetHybridization()
-  feature_getters["atomic radius"]= lambda atom: getMendeleevElement(atom.GetAtomicNum()).atomic_radius or 0 # Atomic radius
-  feature_getters["atomic volume"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).atomic_volume # Atomic volume
-  feature_getters["atomic weight"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).atomic_weight # Atomic weight
-  feature_getters["dipole polarizability"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).dipole_polarizability # Dipole polarizability
-  feature_getters["electron affinity"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).electron_affinity # Electron affinity
-  feature_getters["electronegativity"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).en_pauling # Electronegativity
-  feature_getters["electrons"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).electrons # No. of electrons
-  feature_getters["neutrons"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).neutrons # No. of neutrons
-  feature_getters["formal charge ohe"] = lambda atom: fc_ohe.transform(np.array([[atom.GetFormalCharge()]]))[0]
-  #feature_getters["gaisteigerCharge"] = lambda atom: 0 if np.isfinite(float(atom.GetProp('_GasteigerCharge'))) else float(atom.GetProp('_GasteigerCharge'))  #partial charges
-  feature_getters["chiral tag"] = lambda atom: atom.GetChiralTag()
-
-  return feature_getters
-
-
-
-def getNaiveBondLength(bond):
-    a = getMendeleevElement(bond.GetEndAtom().GetAtomicNum()).atomic_radius or 0
-    b =  getMendeleevElement(bond.GetBeginAtom().GetAtomicNum()).atomic_radius or 0
-
-    return a/200.0 + b/200.0
-
-def bond_feature_smart_distance_and_rdkit_type(bond):
-  onehot_encoded_bondtype = onehot_encoder.transform(np.array([[bond.GetBondType()]]))[0]
-  [x1, y1, z1] = list(bond.GetOwningMol().GetConformer().GetAtomPosition(bond.GetBeginAtomIdx()))
-  [x2, y2, z2] = list(bond.GetOwningMol().GetConformer().GetAtomPosition(bond.GetEndAtomIdx()))
-  ex_dist = getNaiveBondLength(bond)
-  distance = [(math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)) - ex_dist] # Distance
-  return distance+ list(onehot_encoded_bondtype)
-
-def getMendeleevElement(nr):
-  if nr not in el_map:
-   el_map[nr] = mendeleev.element(nr)
-  return el_map[nr]
-
-def nmr_shift(atom):
-  for key, value in atom.GetOwningMol().GetPropsAsDict().items():
-    if key.startswith("Spectrum"):
-      for shift in value.split('|'):
-        x = shift.split(';')
-        if (len(x) == 3 and x[2] == f"{atom.GetIdx()}"):
-          return float(x[0])
-  return float("NaN") # We use NaN for atoms we don't want to predict shifts
-
-def bond_features_distance_only(bond):
-  #onehot_encoded_bondtype = onehot_encoder.transform(np.array([[bond.GetBondType()]]))[0]
-  [x1, y1, z1] = list(bond.GetOwningMol().GetConformer().GetAtomPosition(bond.GetBeginAtomIdx()))
-  [x2, y2, z2] = list(bond.GetOwningMol().GetConformer().GetAtomPosition(bond.GetEndAtomIdx()))
-  distance = [(math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2))] # Distance
-  return distance#+list(onehot_encoded_bondtype)
-
-
-def flatten(l):
-  ret=[]
-  for el in l:
-    if isinstance(el, list) or isinstance(el, np.ndarray):
-      ret.extend(el)
-    else:
-      ret.append(el)
-  return ret
-
-def turn_to_graph (molecule, atom_feature_getters= atom_features_default().values(), bond_features=bond_features_distance_only):
-  node_features = [flatten([getter(atom) for  getter in atom_feature_getters ]) for atom in molecule.GetAtoms() ]
-  node_targets = [nmr_shift(atom) for atom in molecule.GetAtoms()]
-  edge_features = [bond_features(bond) for bond in molecule.GetBonds()]
-  edge_index = [[bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()] for bond in molecule.GetBonds()]
-  # Bonds are not directed, so lets add the missing pair to make the graph undirected
-  edge_index.extend([reversed(bond) for bond in edge_index])
-  edge_features.extend(edge_features)
-  # Some node_features had null values in carbon data and then the long graph compilation process was stopped.
-  if any(None in sublist for sublist in node_features):
-      return None
-
-  return Data(
-      x=tensor(node_features, dtype=torch.float),
-      edge_index=tensor(edge_index, dtype=torch.long).t().contiguous(),
-      edge_attr=tensor(edge_features, dtype=torch.float),
-      y=tensor([[t] for t in node_targets], dtype=torch.float)
-  )
 
 # One hot encoding
 
@@ -133,13 +45,8 @@ atomic_number_ohe = OneHotEncoder(handle_unknown="ignore",sparse=False)
 atomic_number_ohe.fit(atomic_nums)
 atomic_number_ohe.transform(np.array([[1]]))
 
-
-#TODO
-#solvent_ohe = np.array([1,0,0,0,0])
-
-
-
 el_map={}
+
 def getMendeleevElement(nr):
   if nr not in el_map:
    el_map[nr] = mendeleev.element(nr)
@@ -164,14 +71,10 @@ def bond_features(bond):
 def atom_features(atom,  molecule=None):
   me = getMendeleevElement(atom.GetAtomicNum())
 
-  #[x, y, z] = list(atom.GetOwningMol().GetConformer().GetAtomPosition(atom.GetIdx()))
   features = []
-  #TBD: Do we need to encode molecule atom itself? Or is atomic number sufficient? One-hot encode?
   features.extend(atomic_number_ohe.transform(np.array([[atom.GetAtomicNum()]]))[0]) # Atomic number
-  #features.append(atom.GetIsAromatic()) 
   features.extend(np.array([1,0,0,0,0]))
   features.extend(hybridization_ohe.transform(np.array([[atom.GetHybridization().name]]))[0])
-  #features.extend(valence_ohe.transform(np.array([[atom.GetTotalValence()]]))[0])
   features.extend(fc_ohe.transform(np.array([[atom.GetFormalCharge()]]))[0]) 
   features.append(me.atomic_radius or 0) # Atomic radius
   features.append(me.atomic_volume) # Atomic volume
@@ -184,17 +87,12 @@ def atom_features(atom,  molecule=None):
   features.append(me.en_pauling) # Electronegativity
   features.append(me.electrons) # No. of electrons
   features.append(me.neutrons) # No. of neutrons
-  #features.append(x) # X coordinate - TBD: Not sure this is a meaningful feature (but they had in the paper)
-  #features.append(y) # Y coordinate - TBD: Not sure this is a meaningful feature (but they had in the paper)
-  #features.append(z) # Z coordinate - TBD: Not sure this is a meaningful feature (but they had in the paper)
-  #features.append(0 if np.isfinite(float(atom.GetProp('_GasteigerCharge'))) else float(atom.GetProp('_GasteigerCharge')))  #partial charges
   features.append(atom.GetChiralTag())
   features.append(atom.IsInRing())
   return features
 
 
 def convert_to_graph(molecule, atom_feature_constructor=atom_features):
-  #Chem.rdPartialCharges.ComputeGasteigerCharges(molecule)
   node_features = [atom_feature_constructor(atom, molecule) for atom in molecule.GetAtoms()]
   node_targets = [nmr_shift(atom) for atom in molecule.GetAtoms()]
   edge_features = [bond_features(bond) for bond in molecule.GetBonds()]
@@ -252,3 +150,40 @@ def scale_graph_data(latent_graph_list, scaler=None):
 
   scaler= (node_mean,node_std,edge_mean,edge_std)
   return latent_graph_list_sc,scaler
+
+def atom_features_default():
+
+  feature_getters = {}
+
+  feature_getters["ohe atomic number"] = lambda atom:atomic_number_ohe.transform(np.array([[atom.GetAtomicNum()]]))[0] # Atomic number
+  feature_getters["hyb ohe"] = lambda atom: hybridization_ohe.transform(np.array([[atom.GetHybridization().name]]))[0]
+  feature_getters["valence ohe"] = lambda atom: valence_ohe.transform(np.array([[atom.GetTotalValence()]]))[0]
+  feature_getters["hybridization"] = lambda atom: atom.GetHybridization()
+  feature_getters["atomic radius"]= lambda atom: getMendeleevElement(atom.GetAtomicNum()).atomic_radius or 0 # Atomic radius
+  feature_getters["atomic volume"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).atomic_volume # Atomic volume
+  feature_getters["atomic weight"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).atomic_weight # Atomic weight
+  feature_getters["dipole polarizability"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).dipole_polarizability # Dipole polarizability
+  feature_getters["electron affinity"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).electron_affinity # Electron affinity
+  feature_getters["electronegativity"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).en_pauling # Electronegativity
+  feature_getters["electrons"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).electrons # No. of electrons
+  feature_getters["neutrons"] = lambda atom: getMendeleevElement(atom.GetAtomicNum()).neutrons # No. of neutrons
+  feature_getters["formal charge ohe"] = lambda atom: fc_ohe.transform(np.array([[atom.GetFormalCharge()]]))[0]
+  feature_getters["chiral tag"] = lambda atom: atom.GetChiralTag()
+
+  return feature_getters
+
+def bond_features_distance_only(bond):
+  [x1, y1, z1] = list(bond.GetOwningMol().GetConformer().GetAtomPosition(bond.GetBeginAtomIdx()))
+  [x2, y2, z2] = list(bond.GetOwningMol().GetConformer().GetAtomPosition(bond.GetEndAtomIdx()))
+  distance = [(math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2))] # Distance
+  return distance
+
+
+def flatten(l):
+  ret=[]
+  for el in l:
+    if isinstance(el, list) or isinstance(el, np.ndarray):
+      ret.extend(el)
+    else:
+      ret.append(el)
+  return ret

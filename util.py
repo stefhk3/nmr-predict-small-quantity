@@ -1,3 +1,6 @@
+"""\
+This contains some utility functions, mainly for handling the model
+"""
 import math
 from model import GNN_FULL_CLASS
 import torch
