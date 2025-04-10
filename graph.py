@@ -52,9 +52,30 @@ def getMendeleevElement(nr):
    el_map[nr] = mendeleev.element(nr)
   return el_map[nr]
 
-def nmr_shift(atom):
+def nmr_shift(atom, type, nucleus= None):
+  #for nmredata, we read assignment first
+  labelassignemnt = {}
   for key, value in atom.GetOwningMol().GetPropsAsDict().items():
-    if key.startswith("Spectrum"):
+    if type=="nmredata" and key.startswith("NMREDATA_ASSIGNMENT"):
+      for shift in value.split('\n'):
+        shift=shift[:len(shift)-1]
+        if len(shift.split(','))>2:
+          i=0
+          atoms=[]
+          for number in shift.split(','):
+            if i>1:
+              atoms.append(number.strip())
+            i+=1
+          labelassignemnt[shift.split(',')[0]]=atoms
+
+  for key, value in atom.GetOwningMol().GetPropsAsDict().items():
+    if type=="nmredata" and key.startswith("NMREDATA_1D") and key.find(nucleus)>-1:
+      for shift in value.split('\n'):
+        label=shift[shift.find("=")+1:len(shift)-1]
+        atomsearch = f"{atom.GetIdx()}"
+        if label in labelassignemnt and atomsearch in labelassignemnt[label]:
+          return float(shift.split(",")[0])
+    elif type=="nmrshiftdb" and key.startswith("Spectrum"):
       for shift in value.split('|'):
         x = shift.split(';')
         if (len(x) == 3 and x[2] == f"{atom.GetIdx()}"):
@@ -92,9 +113,9 @@ def atom_features(atom,  molecule=None):
   return features
 
 
-def convert_to_graph(molecule, atom_feature_constructor=atom_features):
+def convert_to_graph(molecule, type, nucleus= None, atom_feature_constructor=atom_features):
   node_features = [atom_feature_constructor(atom, molecule) for atom in molecule.GetAtoms()]
-  node_targets = [nmr_shift(atom) for atom in molecule.GetAtoms()]
+  node_targets = [nmr_shift(atom,type,nucleus) for atom in molecule.GetAtoms()]
   edge_features = [bond_features(bond) for bond in molecule.GetBonds()]
   edge_index = [[bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()] for bond in molecule.GetBonds()]
   # Bonds are not directed, so lets add the missing pair to make the graph undirected
