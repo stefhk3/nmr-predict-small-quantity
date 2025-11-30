@@ -1,4 +1,4 @@
-This repository contains the code for the paper "NMR shift prediction from small data quantities" by Herman Rull, Markus Fischer, and Stefan Kuhn ([[https://doi.org/10.1186/s13321-023-00785-x]]).
+This repository contains the code for the paper "NMR shift prediction from small data quantities" by Herman Rull, Markus Fischer, and Stefan Kuhn (https://doi.org/10.1186/s13321-023-00785-x).
 
 # Prerequisites
 
